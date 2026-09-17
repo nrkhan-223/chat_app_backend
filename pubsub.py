@@ -20,16 +20,6 @@ logger = logging.getLogger(__name__)
 class RedisPubSub:
     """
     Redis Pub/Sub manager for cross-worker event broadcasting.
-    
-    Usage:
-        pubsub = RedisPubSub()
-        await pubsub.connect()
-        
-        # Subscribe to a channel
-        await pubsub.subscribe("chat:channel_123", callback)
-        
-        # Publish an event
-        await pubsub.publish("chat:channel_123", {"type": "message:new", ...})
     """
 
     def __init__(self):
@@ -42,16 +32,13 @@ class RedisPubSub:
     async def connect(self):
         """Connect to Redis."""
         try:
-            self.redis = redis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True,
-            )
+            self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
             self.pubsub = self.redis.pubsub()
             self._connected = True
             self._listen_task = asyncio.create_task(self._listen())
-            logger.info("✅ Connected to Redis Pub/Sub")
+            logger.info("Connected to Redis Pub/Sub")
         except Exception as e:
-            logger.warning(f"⚠️ Redis connection failed: {e}. Running in single-worker mode.")
+            logger.warning(f"Redis connection failed: {e}. Running in single-worker mode.")
             self._connected = False
 
     async def disconnect(self):
@@ -64,29 +51,23 @@ class RedisPubSub:
         if self.redis:
             await self.redis.close()
         self._connected = False
-        logger.info("Disconnected from Redis Pub/Sub")
 
     async def subscribe(self, channel: str, callback: Callable):
         """Subscribe to a Redis channel with a callback."""
         if not self._connected:
             return
-
         if channel not in self._listeners:
             self._listeners[channel] = []
             await self.pubsub.subscribe(channel)
-
         self._listeners[channel].append(callback)
 
     async def unsubscribe(self, channel: str, callback: Optional[Callable] = None):
         """Unsubscribe from a Redis channel."""
         if not self._connected:
             return
-
         if callback:
             if channel in self._listeners:
-                self._listeners[channel] = [
-                    cb for cb in self._listeners[channel] if cb != callback
-                ]
+                self._listeners[channel] = [cb for cb in self._listeners[channel] if cb != callback]
                 if not self._listeners[channel]:
                     del self._listeners[channel]
                     await self.pubsub.unsubscribe(channel)
@@ -99,7 +80,6 @@ class RedisPubSub:
         """Publish a message to a Redis channel."""
         if not self._connected:
             return
-
         try:
             await self.redis.publish(channel, json.dumps(data))
         except Exception as e:
@@ -113,13 +93,10 @@ class RedisPubSub:
                     channel = message["channel"]
                     if isinstance(channel, bytes):
                         channel = channel.decode()
-
                     try:
                         data = json.loads(message["data"])
                     except (json.JSONDecodeError, TypeError):
                         continue
-
-                    # Call all registered callbacks
                     callbacks = self._listeners.get(channel, [])
                     for callback in callbacks:
                         try:

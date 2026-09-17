@@ -3,7 +3,6 @@ Authentication API endpoints.
 Handles user registration, login, profile retrieval, and updates.
 """
 
-import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -24,7 +23,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 async def register(
-    data: UserRegister,
+     UserRegister,
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new user account."""
@@ -53,7 +52,7 @@ async def register(
 
 @router.post("/token", response_model=TokenResponse)
 async def login(
-    data: UserLogin,
+     UserLogin,
     session: AsyncSession = Depends(get_session),
 ):
     """Authenticate user and return JWT token."""
@@ -84,7 +83,7 @@ async def get_me(
 
 @router.put("/profile", response_model=UserPublic)
 async def update_profile(
-    data: UserUpdate,
+     UserUpdate,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

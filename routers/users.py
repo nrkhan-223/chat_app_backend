@@ -3,8 +3,9 @@ Users API endpoints.
 Handles user discovery for mentions, DMs, and member additions.
 """
 
+import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 
@@ -52,14 +53,12 @@ async def get_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Get a specific user's public profile."""
-    import uuid
     result = await session.execute(
         select(User).where(User.id == uuid.UUID(user_id))
     )
     user = result.scalar_one_or_none()
 
     if not user:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
