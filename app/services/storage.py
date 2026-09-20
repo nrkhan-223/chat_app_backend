@@ -5,11 +5,10 @@ Supports S3, GCS, and local file storage.
 
 import os
 import uuid
-import mimetypes
 from typing import Tuple
 from pathlib import Path
 
-from config import settings
+from app.config import settings
 
 
 class StorageService:
@@ -19,9 +18,7 @@ class StorageService:
         self.provider = settings.STORAGE_PROVIDER
 
     async def upload_file(self, file_content: bytes, filename: str, content_type: str) -> Tuple[str, str]:
-        """
-        Upload a file and return (public_url, file_key).
-        """
+        """Upload a file and return (public_url, file_key)."""
         ext = Path(filename).suffix
         file_key = f"{uuid.uuid4()}{ext}"
 
@@ -60,7 +57,6 @@ class StorageService:
         client = storage.Client.from_service_account_json(settings.GCS_CREDENTIALS_FILE)
         bucket = client.bucket(settings.GCS_BUCKET_NAME)
         blob = bucket.blob(file_key)
-
         blob.upload_from_string(file_content, content_type=content_type)
 
         url = f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}/{file_key}"

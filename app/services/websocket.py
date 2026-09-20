@@ -10,19 +10,20 @@ import asyncio
 import secrets
 import logging
 from datetime import datetime
-from typing import Dict, Set, Optional, Any
+from typing import Dict, Set, Optional
 from collections import defaultdict
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, or_
 
-from database import async_session
-from models import (
+from app.database import async_session
+from app.models import (
     User, Channel, ChannelMember, Message,
     Attachment, Reaction, ChatType, UserStatus
 )
-from auth import verify_token_for_ws
+from app.auth import verify_token_for_ws
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,6 @@ class ConnectionManager:
             self.chat_subscriptions[chat_id].discard(user_id)
         for chat_id in list(self.typing_users.keys()):
             self.typing_users[chat_id].pop(user_id, None)
-        from config import settings
         task = asyncio.create_task(
             self._schedule_offline(user_id, settings.PRESENCE_OFFLINE_DELAY_SECONDS)
         )
@@ -148,6 +148,7 @@ manager = ConnectionManager()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+    """Main WebSocket endpoint for real-time chat."""
     user_id = verify_token_for_ws(token)
     if not user_id:
         await websocket.close(code=4001, reason="Invalid or expired token")
@@ -200,6 +201,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
 # ==================== EVENT ROUTER ====================
 
 async def _handle_event(websocket: WebSocket, user_id: uuid.UUID, event_type: str, payload: dict):
+    """Route incoming WebSocket events to the appropriate handler."""
     handlers = {
         "message:send": _handle_message_send,
         "message:edit": _handle_message_edit,
@@ -228,6 +230,7 @@ async def _handle_event(websocket: WebSocket, user_id: uuid.UUID, event_type: st
 # ==================== MESSAGE HANDLERS ====================
 
 async def _handle_message_send(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle sending a new message."""
     chat_id = payload.get("chat_id")
     content = payload.get("content", "").strip()
     attachments_data = payload.get("attachments", [])
@@ -243,6 +246,7 @@ async def _handle_message_send(websocket: WebSocket, user_id: uuid.UUID, payload
             await websocket.send_json({"type": "channel:error", "payload": {"detail": "No access to this chat"}})
             return
 
+        # Check posting restrictions
         if chat_type == ChatType.CHANNEL and channel and channel.only_admins_can_post:
             membership = await session.execute(
                 select(ChannelMember).where(and_(
@@ -322,6 +326,7 @@ async def _handle_message_send(websocket: WebSocket, user_id: uuid.UUID, payload
 
 
 async def _handle_message_edit(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle editing a message."""
     message_id = payload.get("message_id")
     content = payload.get("content", "").strip()
     if not message_id or not content:
@@ -348,6 +353,7 @@ async def _handle_message_edit(websocket: WebSocket, user_id: uuid.UUID, payload
 
 
 async def _handle_message_delete(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle deleting a message."""
     message_id = payload.get("message_id")
     if not message_id:
         return
@@ -368,6 +374,7 @@ async def _handle_message_delete(websocket: WebSocket, user_id: uuid.UUID, paylo
 
 
 async def _handle_message_react(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle adding/removing a reaction."""
     message_id = payload.get("message_id")
     emoji = payload.get("emoji", "")
     if not message_id or not emoji:
@@ -409,6 +416,7 @@ async def _handle_message_react(websocket: WebSocket, user_id: uuid.UUID, payloa
 
 
 async def _handle_message_pin(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle pinning/unpinning a message."""
     message_id = payload.get("message_id")
     if not message_id:
         return
@@ -445,6 +453,7 @@ async def _handle_message_pin(websocket: WebSocket, user_id: uuid.UUID, payload:
 # ==================== CHANNEL HANDLERS ====================
 
 async def _handle_channel_create(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle creating a new channel."""
     name = payload.get("name", "").strip()
     if not name:
         await websocket.send_json({"type": "channel:error", "payload": {"detail": "Channel name required"}})
@@ -485,6 +494,7 @@ async def _handle_channel_create(websocket: WebSocket, user_id: uuid.UUID, paylo
 
 
 async def _handle_channel_join(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle joining a channel."""
     channel_id = payload.get("channel_id")
     invite_code = payload.get("invite_code")
     if not channel_id:
@@ -525,6 +535,7 @@ async def _handle_channel_join(websocket: WebSocket, user_id: uuid.UUID, payload
 
 
 async def _handle_channel_leave(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle leaving a channel."""
     channel_id = payload.get("channel_id")
     if not channel_id:
         return
@@ -570,6 +581,7 @@ async def _handle_channel_leave(websocket: WebSocket, user_id: uuid.UUID, payloa
 
 
 async def _handle_channel_add_member(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle adding a member to a channel (admin only)."""
     channel_id = payload.get("channel_id")
     target_user_id = payload.get("user_id")
     if not channel_id or not target_user_id:
@@ -611,6 +623,7 @@ async def _handle_channel_add_member(websocket: WebSocket, user_id: uuid.UUID, p
 
 
 async def _handle_channel_remove_member(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle removing a member from a channel (admin only)."""
     channel_id = payload.get("channel_id")
     target_user_id = payload.get("user_id")
     if not channel_id or not target_user_id:
@@ -649,6 +662,7 @@ async def _handle_channel_remove_member(websocket: WebSocket, user_id: uuid.UUID
 
 
 async def _handle_channel_promote_admin(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle promoting a member to admin."""
     channel_id = payload.get("channel_id")
     target_user_id = payload.get("user_id")
     if not channel_id or not target_user_id:
@@ -684,6 +698,7 @@ async def _handle_channel_promote_admin(websocket: WebSocket, user_id: uuid.UUID
 
 
 async def _handle_channel_demote_admin(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle demoting an admin to regular member."""
     channel_id = payload.get("channel_id")
     target_user_id = payload.get("user_id")
     if not channel_id or not target_user_id:
@@ -719,6 +734,7 @@ async def _handle_channel_demote_admin(websocket: WebSocket, user_id: uuid.UUID,
 
 
 async def _handle_channel_update_settings(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle updating channel settings (admin only)."""
     channel_id = payload.get("channel_id")
     if not channel_id:
         return
@@ -760,6 +776,7 @@ async def _handle_channel_update_settings(websocket: WebSocket, user_id: uuid.UU
 # ==================== TYPING & PRESENCE ====================
 
 async def _handle_typing_start(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle typing start indicator."""
     chat_id = payload.get("chat_id")
     if not chat_id:
         return
@@ -781,6 +798,7 @@ async def _handle_typing_start(websocket: WebSocket, user_id: uuid.UUID, payload
 
 
 async def _handle_typing_stop(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle typing stop indicator."""
     chat_id = payload.get("chat_id")
     if not chat_id:
         return
@@ -801,6 +819,7 @@ async def _handle_typing_stop(websocket: WebSocket, user_id: uuid.UUID, payload:
 
 
 async def _handle_status_update(websocket: WebSocket, user_id: uuid.UUID, payload: dict):
+    """Handle user status update."""
     new_status = payload.get("status")
     if not new_status or new_status not in ["online", "busy", "away"]:
         return
@@ -818,6 +837,7 @@ async def _handle_status_update(websocket: WebSocket, user_id: uuid.UUID, payloa
 # ==================== HELPERS ====================
 
 async def _validate_chat_access(session: AsyncSession, user_id: uuid.UUID, chat_id: str):
+    """Validate that a user has access to a chat."""
     if chat_id.startswith("dm:"):
         parts = chat_id.split(":")
         if len(parts) == 3 and str(user_id) in [parts[1], parts[2]]:
@@ -842,6 +862,7 @@ async def _validate_chat_access(session: AsyncSession, user_id: uuid.UUID, chat_
 
 
 async def _build_init_payload(user_id: uuid.UUID) -> dict:
+    """Build the initial payload sent on WebSocket connection."""
     async with async_session() as session:
         users_result = await session.execute(select(User))
         all_users = users_result.scalars().all()

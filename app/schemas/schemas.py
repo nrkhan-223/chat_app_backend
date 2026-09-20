@@ -84,13 +84,6 @@ class ChannelJoinRequest(BaseModel):
     invite_code: Optional[str] = None
 
 
-class ChannelMemberPublic(BaseModel):
-    user_id: uuid.UUID
-    is_admin: bool
-    joined_at: datetime
-    user: Optional[UserPublic] = None
-
-
 # ==================== MESSAGE SCHEMAS ====================
 
 class AttachmentPublic(BaseModel):
@@ -128,58 +121,6 @@ class MessagePublic(BaseModel):
     reply_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class MessageSend(BaseModel):
-    chat_id: str
-    content: str = Field(min_length=1)
-    attachments: List[AttachmentPublic] = []
-    reply_to_id: Optional[uuid.UUID] = None
-
-
-class MessageEdit(BaseModel):
-    message_id: uuid.UUID
-    content: str = Field(min_length=1)
-
-
-class MessageDelete(BaseModel):
-    message_id: uuid.UUID
-
-
-class MessageReact(BaseModel):
-    message_id: uuid.UUID
-    emoji: str = Field(min_length=1, max_length=50)
-
-
-class MessagePin(BaseModel):
-    message_id: uuid.UUID
-
-
-# ==================== WEBSOCKET EVENT SCHEMAS ====================
-
-# Client-to-Server Events
-class WsClientEvent(BaseModel):
-    type: str
-    payload: dict
-
-
-# Server-to-Client Events
-class WsServerEvent(BaseModel):
-    type: str
-    payload: Any
-
-
-class InitPayload(BaseModel):
-    users: List[UserPublic]
-    channels: List[ChannelPublic]
-    messages: List[MessagePublic]
-    pinned_ids: List[uuid.UUID] = []
-
-
-class TypingUpdatePayload(BaseModel):
-    chat_id: str
-    user_ids: List[uuid.UUID]
-    user_names: List[str]
 
 
 # ==================== UPLOAD SCHEMAS ====================

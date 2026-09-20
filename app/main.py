@@ -1,6 +1,5 @@
 """
 Main FastAPI application entry point.
-Real-time Chat Application Backend.
 """
 
 import logging
@@ -10,10 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import settings
-from database import init_db
-from routers import auth, messages, channels, users, upload
-from websocket import router as ws_router
+from app.config import settings
+from app.database import init_db
+from app.routers import auth_router, messages_router, channels_router, users_router, upload_router
+from app.services.websocket import router as ws_router
+from app.services.pubsub import redis_pubsub
+from app.middleware.error_handler import ErrorHandlerMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -25,23 +26,25 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - startup and shutdown events."""
-    # Startup
+    """Application lifespan handler."""
     logger.info("🚀 Starting Chat Application Backend...")
     logger.info(f"📦 Database: {settings.DATABASE_URL}")
     logger.info(f"💾 Storage Provider: {settings.STORAGE_PROVIDER}")
 
-    # Initialize database tables
+    # Initialize database
     try:
         await init_db()
         logger.info("✅ Database tables created/verified")
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
-        logger.info("⚠️  Make sure PostgreSQL is running and DATABASE_URL is correct")
+
+    # Connect to Redis
+    await redis_pubsub.connect()
 
     yield
 
     # Shutdown
+    await redis_pubsub.disconnect()
     logger.info("👋 Shutting down Chat Application Backend...")
 
 
@@ -54,6 +57,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Add error handler middleware
+app.add_middleware(ErrorHandlerMiddleware)
 
 # CORS Middleware
 app.add_middleware(
@@ -71,47 +77,28 @@ if settings.STORAGE_PROVIDER == "local":
     app.mount("/uploads", StaticFiles(directory=settings.LOCAL_UPLOAD_DIR), name="uploads")
 
 # Include API routers
-app.include_router(auth.router, prefix="/api")
-app.include_router(messages.router, prefix="/api")
-app.include_router(channels.router, prefix="/api")
-app.include_router(users.router, prefix="/api")
-app.include_router(upload.router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(messages_router, prefix="/api")
+app.include_router(channels_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(upload_router, prefix="/api")
 
 # Include WebSocket router
 app.include_router(ws_router)
 
 
-# ==================== HEALTH CHECK ====================
-
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": "1.0.0",
-    }
+    return {"status": "healthy", "app": settings.APP_NAME, "version": "1.0.0"}
 
 
 @app.get("/", tags=["Root"])
 async def root():
-    """Root endpoint with API information."""
-    return {
-        "message": "Chat Application API",
-        "docs": "/docs",
-        "websocket": "/ws?token=<JWT_TOKEN>",
-        "version": "1.0.0",
-    }
+    """Root endpoint."""
+    return {"message": "Chat Application API", "docs": "/docs", "websocket": "/ws?token=<JWT_TOKEN>", "version": "1.0.0"}
 
-
-# ==================== RUN SERVER ====================
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level="info",
-    )
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=settings.DEBUG, log_level="info")

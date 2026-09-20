@@ -8,23 +8,21 @@ across all workers.
 import json
 import asyncio
 import logging
-from typing import Optional, Callable, Any
+from typing import Optional, Callable
 
-import redis.asyncio as redis
+import redis.asyncio as aioredis
 
-from config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class RedisPubSub:
-    """
-    Redis Pub/Sub manager for cross-worker event broadcasting.
-    """
+    """Redis Pub/Sub manager for cross-worker event broadcasting."""
 
     def __init__(self):
-        self.redis: Optional[redis.Redis] = None
-        self.pubsub: Optional[redis.client.PubSub] = None
+        self.redis: Optional[aioredis.Redis] = None
+        self.pubsub: Optional[aioredis.client.PubSub] = None
         self._listeners: dict[str, list[Callable]] = {}
         self._listen_task: Optional[asyncio.Task] = None
         self._connected = False
@@ -32,7 +30,7 @@ class RedisPubSub:
     async def connect(self):
         """Connect to Redis."""
         try:
-            self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            self.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
             self.pubsub = self.redis.pubsub()
             self._connected = True
             self._listen_task = asyncio.create_task(self._listen())
