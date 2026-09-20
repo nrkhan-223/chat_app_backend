@@ -14,9 +14,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from config import settings
-from database import get_session
-from models import User
+from app.config import settings
+from app.database import get_session
+from app.models import User
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -89,22 +89,6 @@ async def get_current_user(
         )
 
     return user
-
-
-async def get_current_user_optional(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    session: AsyncSession = Depends(get_session),
-) -> Optional[User]:
-    """FastAPI dependency to optionally get the current user (returns None if invalid)."""
-    try:
-        token = credentials.credentials
-        user_id = decode_token(token)
-        if user_id is None:
-            return None
-        result = await session.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
-    except Exception:
-        return None
 
 
 def verify_token_for_ws(token: str) -> Optional[uuid.UUID]:

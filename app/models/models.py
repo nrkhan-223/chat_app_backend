@@ -8,7 +8,7 @@ import enum
 from datetime import datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column
-from sqlalchemy import Text, DateTime, Boolean, Integer, String, Enum as SAEnum
+from sqlalchemy import Text, Integer, Enum as SAEnum
 
 
 # ==================== ENUMS ====================
@@ -95,7 +95,7 @@ class Message(SQLModel, table=True):
     __tablename__ = "messages"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    chat_id: str = Field(max_length=255, index=True)  # Channel UUID or dm:{user1}:{user2}
+    chat_id: str = Field(max_length=255, index=True)
     chat_type: ChatType = Field(
         sa_column=Column(SAEnum(ChatType)),
         index=True
@@ -144,8 +144,3 @@ class Reaction(SQLModel, table=True):
     # Relationships
     message: Optional[Message] = Relationship(back_populates="reactions")
     user: Optional[User] = Relationship(back_populates="reactions")
-
-    # Unique constraint: one reaction per user per emoji per message
-    __table_args__ = (
-        {"extend_existing": True},
-    )

@@ -4,7 +4,7 @@ All settings can be overridden via environment variables.
 """
 
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@localhost:5432/chatapp"
 
     # JWT Authentication
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    SECRET_KEY: str = "your-super-secret-key-change-in-production-min-32-chars"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
     # Redis (for multi-worker WebSocket pub/sub)
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -42,13 +42,13 @@ class Settings(BaseSettings):
     # File upload limits
     MAX_IMAGE_SIZE_MB: int = 10
     MAX_FILE_SIZE_MB: int = 50
-    ALLOWED_IMAGE_TYPES: list = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 
     # Presence
     PRESENCE_OFFLINE_DELAY_SECONDS: int = 30
 
     # CORS
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     class Config:
         env_file = ".env"
